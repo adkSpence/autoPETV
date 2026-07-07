@@ -1,0 +1,22 @@
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+
+RUN mkdir -p /opt/algorithm /input /output /output/images/tumor-lesion-segmentation
+
+WORKDIR /opt/algorithm
+
+COPY requirements.txt /opt/algorithm/
+COPY process.py /opt/algorithm/
+COPY utils.py /opt/algorithm/
+COPY nnUNet_results /opt/algorithm/nnUNet_results
+
+RUN python -m pip install -U pip && \
+    python -m pip install -r requirements.txt && \
+    mkdir -p /opt/algorithm/nnUNet_raw && \
+    mkdir -p /opt/algorithm/nnUNet_preprocessed && \
+    mkdir -p /opt/algorithm/nnUNet_raw_data_base/nnUNet_raw_data/Task001_TCIA/imagesTs && \
+    mkdir -p /opt/algorithm/nnUNet_raw_data_base/nnUNet_raw_data/Task001_TCIA/clicksTs && \
+    mkdir -p /opt/algorithm/nnUNet_raw_data_base/nnUNet_raw_data/Task001_TCIA/result
+
+ENV nnUNet_raw="/opt/algorithm/nnUNet_raw"
+ENV nnUNet_preprocessed="/opt/algorithm/nnUNet_preprocessed"
+ENV nnUNet_results="/opt/algorithm/nnUNet_results"
