@@ -7,3 +7,9 @@ __pycache__/
 
 # Ignore Jupyter checkpoints
 tutorial_notebooks/.ipynb_checkpoints/
+
+# Personal learning sandbox: rough experiments and developing intuition
+sandbox/
+
+# PyCharm files
+.idea/
