@@ -6,13 +6,13 @@ submission uses, runs it once against the fixture case in test/input, and
 pulls the prediction back down into test/output.
 
 Usage:
-    modal run modal_app.py
+    modal run modal_deploy/baseline_smoketest.py
 """
 from pathlib import Path
 
 import modal
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent.parent
 BASELINE_DIR = ROOT / "nnunet-baseline"
 TEST_INPUT = ROOT / "test" / "input"
 TEST_OUTPUT = ROOT / "test" / "output"
