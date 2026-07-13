@@ -7,6 +7,7 @@ import SimpleITK
 import torch
 
 from utils import save_click_heatmaps
+from postprocess_filters import filter_low_confidence_components
 
 class Autopet_baseline:
 
@@ -105,6 +106,33 @@ class Autopet_baseline:
 
         return uuid
 
+    def postprocess_prediction(self):
+        """
+        Remove predicted lesion components with both low volume and low
+        PET uptake -- see postprocess_filters.py. Overwrites the raw
+        nnU-Net prediction in place so write_outputs() picks up the
+        filtered result unchanged.
+        """
+        result_nii_path = os.path.join(self.result_path, self.nii_seg_file)
+        pet_nii_path = os.path.join(self.nii_path, "TCIA_001_0001.nii.gz")
+
+        result_img = SimpleITK.ReadImage(result_nii_path)
+        pet_img = SimpleITK.ReadImage(pet_nii_path)
+
+        prediction = SimpleITK.GetArrayFromImage(result_img)
+        pet = SimpleITK.GetArrayFromImage(pet_img)
+        spacing = result_img.GetSpacing()
+
+        filtered = filter_low_confidence_components(prediction, pet, spacing)
+
+        filtered_img = SimpleITK.GetImageFromArray(filtered)
+        filtered_img.CopyInformation(result_img)
+        SimpleITK.WriteImage(filtered_img, result_nii_path, True)
+        print(
+            f"Postprocessing: {int(prediction.sum())} -> {int(filtered.sum())} "
+            f"foreground voxels after low-confidence component filtering"
+        )
+
     def write_outputs(self, uuid):
         """
         Write to /output/
@@ -144,6 +172,8 @@ class Autopet_baseline:
         uuid = self.load_inputs()
         print("Start prediction")
         self.predict()
+        print("Start postprocessing")
+        self.postprocess_prediction()
         print("Start output writing")
         self.write_outputs(uuid)
 
