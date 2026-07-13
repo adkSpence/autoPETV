@@ -13,3 +13,6 @@ sandbox/
 
 # PyCharm files
 .idea/
+
+# Downloaded training data subsets. Pulled on demand
+data/
