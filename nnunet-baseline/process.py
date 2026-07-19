@@ -9,6 +9,32 @@ import torch
 from utils import save_click_heatmaps
 from postprocess_filters import filter_low_confidence_components
 
+# nnU-Net's -tr flag resolves custom trainer classes by physically
+# scanning inside the installed nnunetv2 package (recursive_find_python_class
+# over nnunetv2/training/nnUNetTrainer/), not via normal Python import
+# resolution -- so it has to be written there before nnUNetv2_predict runs.
+# Must match modal_deploy/train_combined.py's CUSTOM_TRAINER_CODE exactly.
+_TRAINER_NAME = "nnUNetTrainer_500ep_freqsave"
+_CUSTOM_TRAINER_CODE = '''
+import torch
+from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+
+
+class nnUNetTrainer_500ep_freqsave(nnUNetTrainer):
+    def __init__(self, plans, configuration, fold, dataset_json, device=torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 500
+        self.save_every = 1
+'''
+
+
+def _install_custom_trainer():
+    import nnunetv2
+    trainer_dir = Path(nnunetv2.__path__[0]) / "training" / "nnUNetTrainer" / "variants" / "training_length"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    (trainer_dir / f"{_TRAINER_NAME}.py").write_text(_CUSTOM_TRAINER_CODE)
+
+
 class Autopet_baseline:
 
     def __init__(self):
@@ -150,8 +176,10 @@ class Autopet_baseline:
         Your algorithm goes here
         """
         print("nnUNet segmentation starting!")
+        _install_custom_trainer()
         cproc = subprocess.run(
-            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 998 -c 3d_fullres -f 0 --disable_tta",
+            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 990 -c 3d_fullres -f 0 "
+            f"-tr nnUNetTrainer_500ep_freqsave --disable_tta",
             shell=True,
             check=True,
         )
