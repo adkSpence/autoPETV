@@ -18,9 +18,6 @@ sandbox/
 data/
 data_combined/
 
-# Claude Code tool settings, not project source
-.claude/
-
 # Generated submission build artifacts (multi-GB Docker/weights tarballs,
 # downloaded checkpoints) -- rebuilt on demand, not checked in
 submission_artifacts/
