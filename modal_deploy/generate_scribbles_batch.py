@@ -4,6 +4,14 @@ downloaded label, in parallel across local CPU cores. Reuses the exact
 logic from interactive/simulate_scribbles.py's __main__ block, just
 importable and parallelized instead of one subprocess per case.
 
+Uses EDT (Euclidean Distance Transform) encoding, not Gaussian heatmaps --
+Team LesionLocator's AutoPET IV winning submission found EDT encoding
+consistently outperforms Gaussian (Dice 68.33 -> 76.19+ in their
+ablation): Gaussian's low-intensity, near-delta-function voxel values
+are poorly captured by the network, whereas EDT gives a dense, smooth
+gradient across the whole volume. See interactive/simulate_scribbles.py
+for the encoding functions themselves.
+
 Run from repo root: python modal_deploy/generate_scribbles_batch.py
 """
 import sys
@@ -19,8 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "interactive"))
 from simulate_scribbles import (
     get_random_k_components,
     generate_scribbles_for_components,
-    generate_heatmap_from_scribbles,
     save_heatmap_nifti,
+    generate_edt_from_scribbles,
 )
 
 ROOT = Path(__file__).parent.parent
@@ -28,6 +36,7 @@ LABELS_DIR = ROOT / "data_combined" / "labelsTr"
 OUT_DIR = ROOT / "data_combined" / "imagesTr"
 STRATEGY = "centerline"
 SEED = 42
+EDT_TRUNCATE_DISTANCE = 10.0
 
 
 def process_one(label_path_str: str) -> str:
@@ -44,14 +53,18 @@ def process_one(label_path_str: str) -> str:
         data = img.get_fdata().astype(np.uint8)
 
         if np.sum(data) == 0:
-            empty = np.zeros_like(data, dtype=np.float32)
+            # No lesion at all: nothing to be near, so every voxel is
+            # "maximally far" from a (nonexistent) click -- fill with the
+            # truncation ceiling rather than zeros, consistent with what
+            # generate_edt_from_scribbles returns for an empty volume.
+            empty = np.full_like(data, EDT_TRUNCATE_DISTANCE, dtype=np.float32)
             save_heatmap_nifti(empty, str(label_path), str(fg_out))
             save_heatmap_nifti(empty, str(label_path), str(bg_out))
             return f"{case_id}: empty"
 
         labels_fg, comp_ids_fg = get_random_k_components(data, k=5)
         scribble_fg = generate_scribbles_for_components(labels_fg, comp_ids_fg, STRATEGY, SEED)
-        heatmap_fg = generate_heatmap_from_scribbles(scribble_fg, sigma=0)
+        heatmap_fg = generate_edt_from_scribbles(scribble_fg, truncate_distance=EDT_TRUNCATE_DISTANCE)
 
         dilated = binary_dilation(data, ball(1))
         dilated = binary_dilation(dilated, ball(1))
@@ -59,7 +72,7 @@ def process_one(label_path_str: str) -> str:
 
         labels_bg, comp_ids_bg = get_random_k_components(bg_region, k=5)
         scribble_bg = generate_scribbles_for_components(labels_bg, comp_ids_bg, STRATEGY, SEED)
-        heatmap_bg = generate_heatmap_from_scribbles(scribble_bg, sigma=0)
+        heatmap_bg = generate_edt_from_scribbles(scribble_bg, truncate_distance=EDT_TRUNCATE_DISTANCE)
 
         save_heatmap_nifti(heatmap_fg, str(label_path), str(fg_out))
         save_heatmap_nifti(heatmap_bg, str(label_path), str(bg_out))

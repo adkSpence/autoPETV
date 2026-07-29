@@ -139,26 +139,39 @@ def simulate_clicks(input_label, input_pet, json_output):
 
 
 
-def generate_gaussian_heatmap(coords, shape, sigma=0.0):
-    from scipy.ndimage import gaussian_filter
+EDT_TRUNCATE_DISTANCE = 10.0  # must match modal_deploy/generate_scribbles_batch.py
+
+
+def generate_edt_heatmap(coords, shape, truncate_distance=EDT_TRUNCATE_DISTANCE):
     """
-    Generate a 3D Gaussian heatmap for given coordinates.
+    Encode clicks/scribble coordinates as a truncated Euclidean distance
+    transform: each voxel's value is its distance (in voxels) to the
+    nearest click, clipped at `truncate_distance`. Must match the encoding
+    used to train the model (see modal_deploy/generate_scribbles_batch.py,
+    interactive/simulate_scribbles.py's generate_edt_from_scribbles) --
+    Gaussian heatmaps were used for an earlier baseline model only.
 
     Args:
         coords (list): List of [x, y, z] coordinates.
         shape (tuple): Shape of the output volume.
-        sigma (float): Standard deviation of the Gaussian.
+        truncate_distance (float): Max distance value (clipping ceiling).
 
     Returns:
-        np.ndarray: 3D volume with Gaussian heatmaps at the specified coordinates.
+        np.ndarray: EDT-encoded volume.
     """
-    heatmap = np.zeros(shape, dtype=np.float32)
+    from scipy.ndimage import distance_transform_edt
+
+    scribble_vol = np.zeros(shape, dtype=np.uint8)
     for coord in coords:
         if 0 <= coord[0] < shape[0] and 0 <= coord[1] < shape[1] and 0 <= coord[2] < shape[2]:
-            heatmap[tuple(coord)] = 1.0
+            scribble_vol[tuple(coord)] = 1
 
-    heatmap = gaussian_filter(heatmap, sigma=sigma)    
-    return heatmap
+    if not np.any(scribble_vol):
+        return np.full(shape, truncate_distance, dtype=np.float32)
+
+    inverse_mask = scribble_vol == 0
+    edt = distance_transform_edt(inverse_mask)
+    return np.clip(edt, 0, truncate_distance).astype(np.float32)
 
 def save_click_heatmaps(clicks, output, input_pet):
     pet_img = nib.load(input_pet)
@@ -166,9 +179,9 @@ def save_click_heatmaps(clicks, output, input_pet):
     ref_affine = pet_img.affine
     tumor_coords = clicks['tumor']
     non_tumor_coords = clicks['background']
-    
-    tumor_heatmap = generate_gaussian_heatmap(tumor_coords, ref_shape, 0)
-    non_tumor_heatmap = generate_gaussian_heatmap(non_tumor_coords, ref_shape, 0)
+
+    tumor_heatmap = generate_edt_heatmap(tumor_coords, ref_shape)
+    non_tumor_heatmap = generate_edt_heatmap(non_tumor_coords, ref_shape)
 
     tumor_nifti = nib.Nifti1Image(tumor_heatmap, ref_affine)
     non_tumor_nifti = nib.Nifti1Image(non_tumor_heatmap, ref_affine)

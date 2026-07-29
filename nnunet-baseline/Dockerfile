@@ -15,7 +15,6 @@ COPY --chown=algorithm:algorithm requirements.txt /opt/algorithm/
 COPY --chown=algorithm:algorithm process.py /opt/algorithm/
 COPY --chown=algorithm:algorithm utils.py /opt/algorithm/
 COPY --chown=algorithm:algorithm postprocess_filters.py /opt/algorithm/
-COPY --chown=algorithm:algorithm nnUNet_results /opt/algorithm/nnUNet_results
 
 RUN python -m pip install --user -U pip && \
     python -m pip install --user -r requirements.txt && \
@@ -27,6 +26,10 @@ RUN python -m pip install --user -U pip && \
 
 ENV nnUNet_raw="/opt/algorithm/nnUNet_raw"
 ENV nnUNet_preprocessed="/opt/algorithm/nnUNet_preprocessed"
-ENV nnUNet_results="/opt/algorithm/nnUNet_results"
+# Model weights are uploaded separately on Grand Challenge (Algorithm ->
+# Models page) rather than baked into the image, to keep the container
+# under the platform's size guidance. Grand Challenge extracts that
+# tarball to /opt/ml/model/ at runtime -- see package_model_weights.sh.
+ENV nnUNet_results="/opt/ml/model/nnUNet_results"
 
 ENTRYPOINT ["python", "-m", "process"]

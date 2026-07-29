@@ -8,22 +8,17 @@ documentation](https://grand-challenge.org/documentation/).
 Best ranked model wins! The rules are simple: Train a model which generalizes well on FDG and PSMA data using scribbles as additional input. This baseline model is out of competition!
 
 ## Usage 
-In order to use the baseline you first need to unzip the baseline weights via `bash unzip_model_weights.sh`. Please make sure you downloaded the weights via GIT LFS!
-We have automated the weight download when you run `bash build.sh` or `bash test.sh`. In order to upload the container, you will need to save the image via `bash export.sh`.
+Model weights are tracked via git-lfs directly in `nnUNet_results/` -- make sure you've run `git lfs pull` before building.
+`bash check_weights.sh` verifies the checkpoint is present and not a stray LFS pointer; `bash build.sh` runs this check
+automatically before building the image.
 
-**Optional:** For faster downloads, install `gdown`:
-```bash
-pip install gdown
-```
+For submission, the container and model weights are packaged separately (Grand Challenge's size guidance keeps
+containers lean and weights uploaded independently): `bash export.sh` saves the container image, and
+`bash package_model_weights.sh` tars up `nnUNet_results/` for upload on the Algorithm's Models page.
 
 ## Testing
 
 Use a python 3.10 based environment and install the requirements.txt file via `pip install -r requirements.txt`. 
-
-**Note:** Model weights are now checked automatically. When you run `bash test.sh`, the script will verify that weights 
-are properly downloaded and will automatically fetch them from Google Drive if needed.
-
-Alternatively, you can manually ensure model weights exist in `/nnUNet_results` by running `bash unzip_model_weights.sh`. 
 
 Then run `bash create_expected_output.sh` to create an expected_output mask. After that you can run `bash test.sh`.
 
@@ -61,7 +56,9 @@ For each ground-truth label:
   - Dilating the ground-truth regions  
   - Sampling components from surrounding areas (simulating oversegmentation corrections)  
 
-These scribbles are converted into Gaussian heatmaps and used as additional input channels.
+These scribbles are converted into heatmaps and used as additional input channels. The original baseline used
+Gaussian heatmaps; the trained model in this repo instead uses Euclidean Distance Transform (EDT) encoding, which
+consistently outperforms Gaussian in the published AutoPET IV winning approach -- see `interactive/simulate_scribbles.py`.
 
 Precomputed heatmaps are provided to participants in `heatmaps.zip`.
 
