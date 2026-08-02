@@ -7,6 +7,7 @@ WORKDIR /opt/algorithm
 COPY requirements.txt /opt/algorithm/
 COPY process.py /opt/algorithm/
 COPY utils.py /opt/algorithm/
+COPY postprocess_filters.py /opt/algorithm/
 COPY nnUNet_results /opt/algorithm/nnUNet_results
 
 RUN python -m pip install -U pip && \

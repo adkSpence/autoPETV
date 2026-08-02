@@ -24,7 +24,7 @@ from skimage.segmentation import find_boundaries
 from skimage.draw import line
 
 from scipy.spatial.distance import cdist
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, distance_transform_edt
 
 from pathlib import Path
 
@@ -385,6 +385,56 @@ def generate_heatmap_from_scribbles(scribble_vol, sigma=0):
         return np.zeros_like(scribble_vol, dtype=np.float32)
 
     return generate_gaussian_heatmap(coords.tolist(), scribble_vol.shape, sigma=sigma)
+
+
+# ------------------------------------------------
+# EDT (Euclidean Distance Transform) ENCODING
+# ------------------------------------------------
+# Additive alternative to the Gaussian heatmap encoding above -- does not
+# replace it, so the original baseline-reproduction path is untouched.
+#
+# Rationale: Team LesionLocator's AutoPET IV interactive-segmentation
+# winning submission found EDT encoding of clicks/scribbles consistently
+# outperforms Gaussian heatmaps (Dice 68.33 -> 76.19+ in their ablation),
+# reasoning that Gaussian kernels produce low-intensity voxel values the
+# network doesn't pick up on effectively, whereas a distance-based signal
+# gives a smoother, more informative gradient away from each click.
+# https://arxiv.org/html/2508.21680v1
+
+def generate_edt_from_scribbles(scribble_vol, truncate_distance=10.0):
+    """
+    Encode a scribble/click volume as a truncated Euclidean distance
+    transform: each voxel's value is its distance (in voxels) to the
+    nearest scribble voxel, clipped at `truncate_distance` so far-away
+    regions don't produce unbounded values.
+
+    Args:
+        scribble_vol (np.ndarray): Binary scribble volume.
+        truncate_distance (float): Max distance value (clipping ceiling).
+
+    Returns:
+        np.ndarray: EDT-encoded volume, same shape as scribble_vol.
+    """
+    if not np.any(scribble_vol):
+        return np.full(scribble_vol.shape, truncate_distance, dtype=np.float32)
+
+    # distance_transform_edt gives, for each voxel, the distance to the
+    # nearest *zero*-valued voxel -- so invert the mask to get distance
+    # to the nearest scribble voxel instead.
+    inverse_mask = scribble_vol == 0
+    edt = distance_transform_edt(inverse_mask)
+    edt = np.clip(edt, 0, truncate_distance)
+    return edt.astype(np.float32)
+
+
+def heatmap_from_coords_edt(coords_xyz, shape, truncate_distance=10.0):
+    """EDT-encoded equivalent of heatmap_from_coords."""
+    scribble_vol = np.zeros(shape, dtype=np.uint8)
+    for coord in coords_xyz:
+        x, y, z = coord
+        if 0 <= x < shape[0] and 0 <= y < shape[1] and 0 <= z < shape[2]:
+            scribble_vol[x, y, z] = 1
+    return generate_edt_from_scribbles(scribble_vol, truncate_distance=truncate_distance)
 
 def simulate_scribble_from_label(label_array, strategy="centerline", seed=42):
     """

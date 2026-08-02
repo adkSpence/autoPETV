@@ -4,8 +4,8 @@ neither meaningful size nor meaningful PET uptake, using both signals
 conservatively (a component is removed only if it fails both criteria).
 
 Thresholds (min_volume_ml, min_suv) were set by inspecting this baseline's
-own false positives on the one available test case (see analyze_false_positives.py) —
-provisional until validated across more cases.
+own false positives on one test case; Provisional until validated across
+more cases.
 """
 import cc3d
 import numpy as np

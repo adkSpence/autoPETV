@@ -7,6 +7,33 @@ import SimpleITK
 import torch
 
 from utils import save_click_heatmaps
+from postprocess_filters import filter_low_confidence_components
+
+# nnU-Net's -tr flag resolves custom trainer classes by physically
+# scanning inside the installed nnunetv2 package (recursive_find_python_class
+# over nnunetv2/training/nnUNetTrainer/), not via normal Python import
+# resolution -- so it has to be written there before nnUNetv2_predict runs.
+# Must match modal_deploy/train_combined.py's CUSTOM_TRAINER_CODE exactly.
+_TRAINER_NAME = "nnUNetTrainer_500ep_freqsave"
+_CUSTOM_TRAINER_CODE = '''
+import torch
+from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+
+
+class nnUNetTrainer_500ep_freqsave(nnUNetTrainer):
+    def __init__(self, plans, configuration, fold, dataset_json, device=torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 500
+        self.save_every = 1
+'''
+
+
+def _install_custom_trainer():
+    import nnunetv2
+    trainer_dir = Path(nnunetv2.__path__[0]) / "training" / "nnUNetTrainer" / "variants" / "training_length"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+    (trainer_dir / f"{_TRAINER_NAME}.py").write_text(_CUSTOM_TRAINER_CODE)
+
 
 class Autopet_baseline:
 
@@ -105,6 +132,33 @@ class Autopet_baseline:
 
         return uuid
 
+    def postprocess_prediction(self):
+        """
+        Remove predicted lesion components with both low volume and low
+        PET uptake -- see postprocess_filters.py. Overwrites the raw
+        nnU-Net prediction in place so write_outputs() picks up the
+        filtered result unchanged.
+        """
+        result_nii_path = os.path.join(self.result_path, self.nii_seg_file)
+        pet_nii_path = os.path.join(self.nii_path, "TCIA_001_0001.nii.gz")
+
+        result_img = SimpleITK.ReadImage(result_nii_path)
+        pet_img = SimpleITK.ReadImage(pet_nii_path)
+
+        prediction = SimpleITK.GetArrayFromImage(result_img)
+        pet = SimpleITK.GetArrayFromImage(pet_img)
+        spacing = result_img.GetSpacing()
+
+        filtered = filter_low_confidence_components(prediction, pet, spacing)
+
+        filtered_img = SimpleITK.GetImageFromArray(filtered)
+        filtered_img.CopyInformation(result_img)
+        SimpleITK.WriteImage(filtered_img, result_nii_path, True)
+        print(
+            f"Postprocessing: {int(prediction.sum())} -> {int(filtered.sum())} "
+            f"foreground voxels after low-confidence component filtering"
+        )
+
     def write_outputs(self, uuid):
         """
         Write to /output/
@@ -122,8 +176,10 @@ class Autopet_baseline:
         Your algorithm goes here
         """
         print("nnUNet segmentation starting!")
+        _install_custom_trainer()
         cproc = subprocess.run(
-            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 998 -c 3d_fullres -f 0 --disable_tta",
+            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 990 -c 3d_fullres -f 0 "
+            f"-tr nnUNetTrainer_500ep_freqsave --disable_tta",
             shell=True,
             check=True,
         )
@@ -144,6 +200,8 @@ class Autopet_baseline:
         uuid = self.load_inputs()
         print("Start prediction")
         self.predict()
+        print("Start postprocessing")
+        self.postprocess_prediction()
         print("Start output writing")
         self.write_outputs(uuid)
 

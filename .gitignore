@@ -13,3 +13,12 @@ sandbox/
 
 # PyCharm files
 .idea/
+
+# Downloaded training data subsets. Pulled on demand
+data/
+data_combined/
+
+# Generated submission build artifacts (multi-GB Docker/weights tarballs,
+# downloaded checkpoints) -- rebuilt on demand, not checked in
+submission_artifacts/
+trained_model_download/
