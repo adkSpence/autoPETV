@@ -1,6 +1,7 @@
 #!/bin/bash
 # Train one ResEncL fold at 1000 epochs (stock nnUNetTrainer default).
-# Usage: ./03_train_fold.sh <fold>       (fold in 0..4; priority: 2, 3, 4)
+# Usage: ./03_train_fold.sh <fold>   (priority queue: 2 -> 3 -> 4 -> 0 -> 1;
+#         every completed fold is independently useful, stop anywhere)
 # Idempotent: resumes from checkpoint_latest.pth automatically if present.
 set -euo pipefail
 FOLD="${1:?usage: ./03_train_fold.sh <fold 0-4>}"

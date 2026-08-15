@@ -2,9 +2,16 @@
 
 Goal: train nnU-Net **ResEncL** folds at **1000 epochs** on the full combined
 FDG+PSMA dataset (Dataset990, 1614 cases, 4 channels: CT / PET / FG-scribble-EDT
-/ BG-scribble-EDT). Priority order: **fold 2, fold 3, fold 4** (folds 0/1 exist
-as plain-UNet 500ep models on our side; re-runs of 0/1 at ResEncL-1000 are
-stretch goals if allocation allows).
+/ BG-scribble-EDT). Work through the priority queue as far as your
+allocation allows -- every completed fold is independently useful, stop
+wherever you have to:
+
+**fold 2 -> 3 -> 4 -> 0 -> 1** (all ResEncL @ 1000ep)
+
+Folds 2/3/4 first: they are empty slots (each adds a new train/val split to
+the ensemble pool). Folds 0/1 exist as plain-UNet 500ep models on our side,
+so re-running them as ResEncL is an upgrade, not a gap-fill -- valuable, but
+last in the queue.
 
 Why ResEncL: measured on our fixed 250-case ablation (identical protocol,
 full-volume validation): ResEncL Dice **0.7506** / lesion-F1 **0.8723** vs
