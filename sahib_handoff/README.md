@@ -20,10 +20,16 @@ plain UNet 0.7102 / 0.8214.
 ## Steps
 ```bash
 ./01_setup_env.sh          # venv + nnunetv2==2.6.0 + env vars (source it thereafter)
-./02_pull_data.sh          # pulls preprocessed ResEncL dataset from our GCS bucket
+./02_pull_data.sh          # EITHER: pull our ready-made preprocessed data (~130GB)
+# OR, if you have the official AutoPET V raw release on-cluster already:
+RAW_SRC=/path/to/raw ./02b_build_dataset.sh   # regenerate locally (deterministic,
+                                              # hash-verified against our copy)
 ./03_train_fold.sh 2       # one fold per GPU/job; auto-resumes if interrupted
 ./04_push_results.sh 2     # sends back checkpoints + validation summary
 ```
+`02b` needs zero large transfer from us: the custom scribble channels are a
+deterministic function (fixed seeds) of the official labels, rebuilt by the
+repo's own scripts and verified with content hashes before training.
 
 Every script is idempotent: re-running is always safe. `03_train_fold.sh`
 detects an existing `checkpoint_latest.pth` and resumes with `--c`

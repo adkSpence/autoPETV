@@ -31,9 +31,10 @@ from simulate_scribbles import (
     generate_edt_from_scribbles,
 )
 
+import os
 ROOT = Path(__file__).parent.parent
-LABELS_DIR = ROOT / "data_combined" / "labelsTr"
-OUT_DIR = ROOT / "data_combined" / "imagesTr"
+LABELS_DIR = Path(os.environ.get("SCRIBBLE_LABELS_DIR", ROOT / "data_combined" / "labelsTr"))
+OUT_DIR = Path(os.environ.get("SCRIBBLE_OUT_DIR", ROOT / "data_combined" / "imagesTr"))
 STRATEGY = "centerline"
 SEED = 42
 EDT_TRUNCATE_DISTANCE = 10.0
