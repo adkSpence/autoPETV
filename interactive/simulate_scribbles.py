@@ -436,6 +436,71 @@ def heatmap_from_coords_edt(coords_xyz, shape, truncate_distance=10.0):
             scribble_vol[x, y, z] = 1
     return generate_edt_from_scribbles(scribble_vol, truncate_distance=truncate_distance)
 
+
+# ------------------------------------------------
+# BINARY DISK ENCODING
+# ------------------------------------------------
+# Fixed-radius blob around each scribble voxel, still binary-valued (0/1)
+# unlike EDT/Gaussian -- but not the pathologically sparse single-voxel
+# case either. Included because "Guiding the Guidance" (arXiv 2303.06942)
+# found plain binary disks can outperform naive Gaussian/distance-transform
+# encodings in some interactive segmentation settings -- worth ablating
+# rather than assuming EDT wins by default.
+
+def generate_disk_from_scribbles(scribble_vol, radius=3):
+    """Dilate a binary scribble volume by a fixed voxel radius."""
+    if not np.any(scribble_vol):
+        return np.zeros(scribble_vol.shape, dtype=np.float32)
+    dilated = binary_dilation(scribble_vol.astype(bool), ball(radius))
+    return dilated.astype(np.float32)
+
+
+# ------------------------------------------------
+# ADAPTIVE GEODESIC-GAUSSIAN ENCODING
+# ------------------------------------------------
+# Per arXiv 2303.06942 ("Guiding the Guidance"), which reported +14% Dice
+# on AutoPET specifically: geodesic distance (measured along image
+# intensity structure, not straight-line space) respects anatomical
+# boundaries that Euclidean distance ignores -- two voxels physically close
+# but separated by a strong CT edge get a *larger* geodesic distance than
+# EDT would assign. Implemented as a two-pass raster-scan approximation
+# (the standard approach used in DeepIGeoS, arXiv 1707.00652) rather than
+# exact fast marching, to avoid a new heavyweight dependency.
+
+def geodesic_distance_transform(scribble_vol, intensity_vol, intensity_weight=1.0, num_passes=2):
+    """
+    Approximate geodesic distance transform via iterative raster scans.
+    Distance between neighboring voxels is their spatial step size plus a
+    penalty proportional to their intensity difference, so the "cost" of
+    crossing a strong edge (e.g. an organ boundary) is higher than crossing
+    a homogeneous region.
+    """
+    inf = 1e6
+    dist = np.where(scribble_vol > 0, 0.0, inf).astype(np.float32)
+    intensity = intensity_vol.astype(np.float32)
+
+    offsets = [(-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1)]
+
+    for _ in range(num_passes):
+        for dx, dy, dz in offsets:
+            shifted_dist = np.roll(dist, shift=(dx, dy, dz), axis=(0, 1, 2))
+            shifted_intensity = np.roll(intensity, shift=(dx, dy, dz), axis=(0, 1, 2))
+            step_cost = 1.0 + intensity_weight * np.abs(intensity - shifted_intensity)
+            candidate = shifted_dist + step_cost
+            dist = np.minimum(dist, candidate)
+
+    return dist
+
+
+def generate_geodesic_gaussian_from_scribbles(scribble_vol, intensity_vol, sigma=5.0, intensity_weight=1.0):
+    """Gaussian falloff over geodesic (not Euclidean) distance from scribbles."""
+    if not np.any(scribble_vol):
+        return np.zeros(scribble_vol.shape, dtype=np.float32)
+    d_geo = geodesic_distance_transform(scribble_vol, intensity_vol, intensity_weight=intensity_weight)
+    heatmap = np.exp(-(d_geo ** 2) / (2 * sigma ** 2))
+    return heatmap.astype(np.float32)
+
+
 def simulate_scribble_from_label(label_array, strategy="centerline", seed=42):
     """
     Slice-wise component selection:
