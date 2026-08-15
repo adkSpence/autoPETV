@@ -61,5 +61,3 @@ Data is available two ways (whichever suits the cluster): `gsutil` from
 get` from the Modal workspace. Send Spencer the account email to grant either.
 
 Note: ResEncL needs **≥ 24 GB VRAM** per card — a 16 GB card OOMs (verified).
-
-Questions: ping Spencer.
