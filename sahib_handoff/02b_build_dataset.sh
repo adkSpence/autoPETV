@@ -23,7 +23,6 @@ DST="$nnUNet_raw/Dataset990_AutoPETCombined"
 mkdir -p "$DST"
 
 # 1. Link official CT/PET/labels into the dataset (no copy needed)
-ln -sfn "$RAW_SRC/imagesTr" "$DST/imagesTr_src" 2>/dev/null || true
 mkdir -p "$DST/imagesTr" "$DST/labelsTr"
 for f in "$RAW_SRC"/imagesTr/*_0000.nii.gz "$RAW_SRC"/imagesTr/*_0001.nii.gz; do
     ln -sf "$f" "$DST/imagesTr/$(basename "$f")"
@@ -36,7 +35,6 @@ N_LABELS=$(ls "$DST/labelsTr" | wc -l)
 
 # 2. Generate the FG/BG scribble EDT channels (_0002/_0003) -- deterministic,
 #    seed=42, centerline strategy, EDT truncation 10.0. ~1-2h on many cores.
-"$HERE/../.venv/bin/python3" 2>/dev/null || true
 pip install nibabel scikit-image connected-components-3d scipy -q
 SCRIBBLE_LABELS_DIR="$DST/labelsTr" SCRIBBLE_OUT_DIR="$DST/imagesTr" \
     python3 "$REPO/modal_deploy/generate_scribbles_batch.py"
@@ -44,9 +42,13 @@ SCRIBBLE_LABELS_DIR="$DST/labelsTr" SCRIBBLE_OUT_DIR="$DST/imagesTr" \
 # 3. Verify the generated channels are bit-equivalent to ours -- MANDATORY.
 python3 "$HERE/verify_channels.py" --check "$DST/imagesTr"
 
-# 4. dataset.json (shipped) + ResEncL planning + preprocessing
+# 4. dataset.json (shipped) + planning scaffold + OUR canonical plans.
+#    Planning runs only to create the fingerprint/scaffolding; its generated
+#    plans are then overwritten with the exact plans file our reference copy
+#    was preprocessed with -- zero plan-divergence between his data and ours.
 cp "$HERE/dataset.json" "$DST/dataset.json"
 nnUNetv2_plan_and_preprocess -d 990 -pl nnUNetPlannerResEncL --no_pp
+cp "$HERE/nnUNetResEncUNetLPlans.json" "$nnUNet_preprocessed/Dataset990_AutoPETCombined/nnUNetResEncUNetLPlans.json"
 nnUNetv2_preprocess -d 990 -plans_name nnUNetResEncUNetLPlans -c 3d_fullres -np 12
 
 # 5. Our exact split definitions (shipped) -- MUST be in place before training
