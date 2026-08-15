@@ -89,7 +89,7 @@ def timed_predict(case_id: str = None):
         trainer_dir.mkdir(parents=True, exist_ok=True)
         (trainer_dir / f"{TRAINER_NAME}.py").write_text(CUSTOM_TRAINER_CODE)
 
-    def filter_low_confidence_components(prediction, pet, spacing, min_volume_ml=0.35, min_suv=6.0):
+    def filter_low_confidence_components(prediction, pet, spacing, min_volume_ml=0.2, min_suv=10.0):
         voxel_volume_ml = float(np.prod(spacing)) / 1000
         labeled, num_components = cc3d.connected_components(prediction.astype(int), connectivity=18, return_N=True)
         filtered = prediction.copy()
@@ -134,7 +134,7 @@ def timed_predict(case_id: str = None):
         [
             "nnUNetv2_predict", "-i", str(in_dir), "-o", str(out_dir),
             "-d", str(DATASET_ID), "-c", CONFIGURATION, "-f", str(FOLD),
-            "-tr", TRAINER_NAME, "-p", PLANS_IDENTIFIER, "--disable_tta",
+            "-tr", TRAINER_NAME, "-p", PLANS_IDENTIFIER,
         ],
         check=True,
     )

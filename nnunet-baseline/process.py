@@ -179,7 +179,7 @@ class Autopet_baseline:
         _install_custom_trainer()
         cproc = subprocess.run(
             f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 990 -c 3d_fullres -f 0 "
-            f"-tr nnUNetTrainer_500ep_freqsave --disable_tta",
+            f"-tr nnUNetTrainer_500ep_freqsave",
             shell=True,
             check=True,
         )
