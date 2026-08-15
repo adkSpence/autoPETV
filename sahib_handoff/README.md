@@ -42,25 +42,11 @@ automatically — a killed/preempted job just needs the same command again.
   match ours exactly or ensembling/comparability breaks)
 - nnunetv2 pinned to 2.6.0 (matches the plans/preprocessing exactly)
 
-## Before you start — three answers we need
-1. **VRAM + concurrency**: how much VRAM per card, and how many cards can you
-   hold for ~2 weeks? ResEncL **requires ≥ 24 GB** — a 16 GB card OOMs
-   (verified). If you only have 16 GB cards, stop here and tell us; the
-   architecture choice changes.
-2. **Egress**: can your compute/login nodes reach the internet (pull ~130 GB
-   from Modal's CLI or a GCS bucket)?
-3. **Data path preference** (pick one):
-   - **A (default)**: pull our verified, ready-made preprocessed data —
-     `02_pull_data.sh` (GCS) or `modal volume get` (we invite you to the
-     workspace; usually faster).
-   - **B**: you already have the AutoPET V raw release (QIBA-aligned, Apr 26,
-     FDG+PSMA) on-cluster → we send only our scribble-generation scripts +
-     `splits_final.json` + plans (KBs, deterministic given seeds) and you
-     preprocess locally; we cross-check a few case checksums before you train.
-
 ## Access
-The GCS bucket is `gs://autopetv-data-transfer`. Send us the email of the
-Google account you're authenticated as (`gcloud auth list`) and/or the email
-to invite to the Modal workspace.
+Data is available two ways (whichever suits the cluster): `gsutil` from
+`gs://autopetv-data-transfer` (used by `02_pull_data.sh`), or `modal volume
+get` from the Modal workspace. Send Spencer the account email to grant either.
+
+Note: ResEncL needs **≥ 24 GB VRAM** per card — a 16 GB card OOMs (verified).
 
 Questions: Spencer (spencerapeadjei@gmail.com).
