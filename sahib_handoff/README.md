@@ -62,4 +62,4 @@ get` from the Modal workspace. Send Spencer the account email to grant either.
 
 Note: ResEncL needs **≥ 24 GB VRAM** per card — a 16 GB card OOMs (verified).
 
-Questions: Spencer (spencerapeadjei@gmail.com).
+Questions: ping Spencer.
