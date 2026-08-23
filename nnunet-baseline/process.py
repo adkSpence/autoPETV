@@ -173,20 +173,41 @@ class Autopet_baseline:
 
     def predict(self):
         """
-        Your algorithm goes here
+        Two-model ensemble: fold-0+1 (plain UNet, nnUNetTrainer_500ep_freqsave)
+        ensembled natively via -f 0 1, and fold-2 (ResEncL, stock nnUNetTrainer)
+        predicted separately since it's a different architecture/plans and
+        can't join the same -f call. Both saved with --save_probabilities,
+        then combined via nnUNetv2_ensemble (averages softmax in original
+        image space) -- the correct way to ensemble across configurations,
+        not just folds within one.
         """
         print("nnUNet segmentation starting!")
         _install_custom_trainer()
-        cproc = subprocess.run(
-            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 990 -c 3d_fullres -f 0 "
-            f"-tr nnUNetTrainer_500ep_freqsave --disable_tta",
-            shell=True,
-            check=True,
+
+        plain_out = os.path.join(self.result_path, "plain_ensemble")
+        resencl_out = os.path.join(self.result_path, "resencl_fold2")
+        os.makedirs(plain_out, exist_ok=True)
+        os.makedirs(resencl_out, exist_ok=True)
+
+        print("Predicting: plain UNet ensemble (fold 0+1)...")
+        subprocess.run(
+            f"nnUNetv2_predict -i {self.nii_path} -o {plain_out} -d 990 -c 3d_fullres -f 0 1 "
+            f"-tr nnUNetTrainer_500ep_freqsave --save_probabilities",
+            shell=True, check=True,
         )
-        print(cproc)
-        # since nnUNet_predict call is split into prediction and postprocess, a pre-mature exit code is received but
-        # segmentation file not yet written. This hack ensures that all spawned subprocesses are finished before being
-        # printed.
+
+        print("Predicting: ResEncL fold 2...")
+        subprocess.run(
+            f"nnUNetv2_predict -i {self.nii_path} -o {resencl_out} -d 990 -c 3d_fullres -f 2 "
+            f"-tr nnUNetTrainer -p nnUNetResEncUNetLPlans --save_probabilities",
+            shell=True, check=True,
+        )
+
+        print("Ensembling plain + ResEncL predictions...")
+        subprocess.run(
+            f"nnUNetv2_ensemble -i {plain_out} {resencl_out} -o {self.result_path}",
+            shell=True, check=True,
+        )
         print("Prediction finished")
 
    

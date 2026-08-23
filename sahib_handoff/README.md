@@ -1,0 +1,63 @@
+# AutoPET V — ResEncL scale runs (handoff)
+
+Goal: train nnU-Net **ResEncL** folds at **1000 epochs** on the full combined
+FDG+PSMA dataset (Dataset990, 1614 cases, 4 channels: CT / PET / FG-scribble-EDT
+/ BG-scribble-EDT). Work through the priority queue as far as your
+allocation allows -- every completed fold is independently useful, stop
+wherever you have to:
+
+**fold 2 -> 3 -> 4 -> 0 -> 1** (all ResEncL @ 1000ep)
+
+Folds 2/3/4 first: they are empty slots (each adds a new train/val split to
+the ensemble pool). Folds 0/1 exist as plain-UNet 500ep models on our side,
+so re-running them as ResEncL is an upgrade, not a gap-fill -- valuable, but
+last in the queue.
+
+Why ResEncL: measured on our fixed 250-case ablation (identical protocol,
+full-volume validation): ResEncL Dice **0.7506** / lesion-F1 **0.8723** vs
+plain UNet 0.7102 / 0.8214.
+
+## Hardware requirements (per fold / per job)
+- 1× GPU with **≥ 24 GB VRAM** (ResEncL plans target 24 GB; a 16 GB card OOMs — verified)
+- ~64 GB system RAM recommended (data-aug workers), 8+ CPU cores
+- **~200 GB free disk** (preprocessed dataset ~130 GB + checkpoints/logs)
+- Rough per-fold wall clock: A100 ~1.5–2 days; L4/4090-class ~2.5–3.5 days.
+  Folds are fully independent → run in parallel on separate GPUs if available.
+
+## Steps
+```bash
+./01_setup_env.sh          # venv + nnunetv2==2.6.0 + env vars (source it thereafter)
+./02_pull_data.sh          # EITHER: pull our ready-made preprocessed data (~130GB)
+# OR, if you have the official AutoPET V raw release on-cluster already:
+RAW_SRC=/path/to/raw ./02b_build_dataset.sh   # regenerate locally (deterministic,
+                                              # hash-verified against our copy)
+./03_train_fold.sh 2       # one fold per GPU/job; auto-resumes if interrupted
+./04_push_results.sh 2     # sends back checkpoints + validation summary
+```
+`02b` needs zero large transfer from us: the custom scribble channels are a
+deterministic function (fixed seeds) of the official labels, rebuilt by the
+repo's own scripts and verified with content hashes before training.
+
+Every script is idempotent: re-running is always safe. `03_train_fold.sh`
+detects an existing `checkpoint_latest.pth` and resumes with `--c`
+automatically — a killed/preempted job just needs the same command again.
+
+## What we need back (per fold)
+`04_push_results.sh N` uploads exactly these to the bucket:
+- `checkpoint_final.pth` and `checkpoint_best.pth`
+- `validation/summary.json` (the real Mean Validation Dice)
+- training logs
+
+## Invariants — do not change
+- `-p nnUNetResEncUNetLPlans` and the stock trainer (its default IS 1000 epochs;
+  no `-tr` flag anywhere)
+- The shipped `splits_final.json` must be used untouched (fold definitions must
+  match ours exactly or ensembling/comparability breaks)
+- nnunetv2 pinned to 2.6.0 (matches the plans/preprocessing exactly)
+
+## Access
+Data is available two ways (whichever suits the cluster): `gsutil` from
+`gs://autopetv-data-transfer` (used by `02_pull_data.sh`), or `modal volume
+get` from the Modal workspace. Send Spencer the account email to grant either.
+
+Note: ResEncL needs **≥ 24 GB VRAM** per card — a 16 GB card OOMs (verified).
