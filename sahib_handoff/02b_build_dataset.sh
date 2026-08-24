@@ -54,4 +54,7 @@ nnUNetv2_preprocess -d 990 -plans_name nnUNetResEncUNetLPlans -c 3d_fullres -np 
 # 5. Our exact split definitions (shipped) -- MUST be in place before training
 cp "$HERE/splits_final.json" "$nnUNet_preprocessed/Dataset990_AutoPETCombined/splits_final.json"
 
+python3 "$HERE/verify_preprocessed.py" \
+    "$nnUNet_preprocessed/Dataset990_AutoPETCombined"
+
 echo "Dataset built and verified. Next: ./03_train_fold.sh 2"

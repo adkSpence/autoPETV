@@ -8,6 +8,8 @@ FOLD="${1:?usage: ./03_train_fold.sh <fold 0-4>}"
 source "$(dirname "${BASH_SOURCE[0]}")/01_setup_env.sh"
 
 OUT="$nnUNet_results/Dataset990_AutoPETCombined/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/fold_$FOLD"
+python3 "$(dirname "${BASH_SOURCE[0]}")/verify_preprocessed.py" \
+    "$nnUNet_preprocessed/Dataset990_AutoPETCombined"
 
 RESUME=()
 if [ -f "$OUT/checkpoint_latest.pth" ]; then
