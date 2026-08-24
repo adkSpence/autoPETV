@@ -139,49 +139,53 @@ def simulate_clicks(input_label, input_pet, json_output):
 
 
 
-EDT_TRUNCATE_DISTANCE = 10.0  # must match modal_deploy/generate_scribbles_batch.py
+EDT_ANCHOR_RADIUS_MM = 4.0
+EDT_SUPPORT_RADIUS_MM = 40.0
 
 
-def generate_edt_heatmap(coords, shape, truncate_distance=EDT_TRUNCATE_DISTANCE):
+def generate_edt_heatmap(
+    coords,
+    shape,
+    spacing=(1.0, 1.0, 1.0),
+    anchor_radius_mm=EDT_ANCHOR_RADIUS_MM,
+    support_radius_mm=EDT_SUPPORT_RADIUS_MM,
+):
     """
-    Encode clicks/scribble coordinates as a truncated Euclidean distance
-    transform: each voxel's value is its distance (in voxels) to the
-    nearest click, clipped at `truncate_distance`. Must match the encoding
-    used to train the model (see modal_deploy/generate_scribbles_batch.py,
-    interactive/simulate_scribbles.py's generate_edt_from_scribbles) --
-    Gaussian heatmaps were used for an earlier baseline model only.
+    Encode clicks as the local linear EDT support used during multiround
+    training: 1 near the click and 0 beyond the support radius.
 
     Args:
         coords (list): List of [x, y, z] coordinates.
         shape (tuple): Shape of the output volume.
-        truncate_distance (float): Max distance value (clipping ceiling).
+        spacing (tuple): Voxel spacing in millimeters.
 
     Returns:
         np.ndarray: EDT-encoded volume.
     """
     from scipy.ndimage import distance_transform_edt
 
-    scribble_vol = np.zeros(shape, dtype=np.uint8)
+    seeds = np.ones(shape, dtype=bool)
     for coord in coords:
         if 0 <= coord[0] < shape[0] and 0 <= coord[1] < shape[1] and 0 <= coord[2] < shape[2]:
-            scribble_vol[tuple(coord)] = 1
+            seeds[tuple(coord)] = False
 
-    if not np.any(scribble_vol):
-        return np.full(shape, truncate_distance, dtype=np.float32)
+    if seeds.all():
+        return np.zeros(shape, dtype=np.float32)
 
-    inverse_mask = scribble_vol == 0
-    edt = distance_transform_edt(inverse_mask)
-    return np.clip(edt, 0, truncate_distance).astype(np.float32)
+    distance = distance_transform_edt(seeds, sampling=spacing)
+    width = support_radius_mm - anchor_radius_mm
+    return (1.0 - np.clip((distance - anchor_radius_mm) / width, 0.0, 1.0)).astype(np.float32)
 
 def save_click_heatmaps(clicks, output, input_pet):
     pet_img = nib.load(input_pet)
     ref_shape = pet_img.shape
     ref_affine = pet_img.affine
+    spacing = pet_img.header.get_zooms()[:3]
     tumor_coords = clicks['tumor']
     non_tumor_coords = clicks['background']
 
-    tumor_heatmap = generate_edt_heatmap(tumor_coords, ref_shape)
-    non_tumor_heatmap = generate_edt_heatmap(non_tumor_coords, ref_shape)
+    tumor_heatmap = generate_edt_heatmap(tumor_coords, ref_shape, spacing)
+    non_tumor_heatmap = generate_edt_heatmap(non_tumor_coords, ref_shape, spacing)
 
     tumor_nifti = nib.Nifti1Image(tumor_heatmap, ref_affine)
     non_tumor_nifti = nib.Nifti1Image(non_tumor_heatmap, ref_affine)

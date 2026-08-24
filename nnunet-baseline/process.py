@@ -13,18 +13,15 @@ from postprocess_filters import filter_low_confidence_components
 # scanning inside the installed nnunetv2 package (recursive_find_python_class
 # over nnunetv2/training/nnUNetTrainer/), not via normal Python import
 # resolution -- so it has to be written there before nnUNetv2_predict runs.
-# Must match modal_deploy/train_combined.py's CUSTOM_TRAINER_CODE exactly.
-_TRAINER_NAME = "nnUNetTrainer_500ep_freqsave"
+# Prediction only needs the training class name to be discoverable. The
+# checkpoint uses nnU-Net's standard ResEnc architecture.
+_TRAINER_NAME = "nnUNetTrainerResEnc4ChannelRoundSupervisionEDT"
 _CUSTOM_TRAINER_CODE = '''
-import torch
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 
 
-class nnUNetTrainer_500ep_freqsave(nnUNetTrainer):
-    def __init__(self, plans, configuration, fold, dataset_json, device=torch.device("cuda")):
-        super().__init__(plans, configuration, fold, dataset_json, device)
-        self.num_epochs = 500
-        self.save_every = 1
+class nnUNetTrainerResEnc4ChannelRoundSupervisionEDT(nnUNetTrainer):
+    pass
 '''
 
 
@@ -178,8 +175,9 @@ class Autopet_baseline:
         print("nnUNet segmentation starting!")
         _install_custom_trainer()
         cproc = subprocess.run(
-            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 990 -c 3d_fullres -f 0 "
-            f"-tr nnUNetTrainer_500ep_freqsave --disable_tta",
+            f"nnUNetv2_predict -i {self.nii_path} -o {self.result_path} -d 994 -c 3d_fullres -f 0 "
+            f"-tr {_TRAINER_NAME} -p nnUNetResEncUNetMPlans "
+            f"-chk checkpoint_deploy.pth --disable_tta",
             shell=True,
             check=True,
         )
