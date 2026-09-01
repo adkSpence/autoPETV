@@ -57,25 +57,79 @@ sahib_handoff/            scripts for training folds at scale
 paper/                    LNCS manuscript
 ```
 
-## Reproducing the submission
+## Running it
 
-Requires `git-lfs` and Docker with GPU support.
+**Requirements:** `git-lfs`, Docker with NVIDIA GPU support
+(`nvidia-container-toolkit`), and a GPU with at least 12 GB of memory.
+Inference takes roughly 70 s per case on an L4.
+
+### 1. Clone and fetch the weights
 
 ```bash
 git clone https://github.com/adkSpence/autoPETV.git
 cd autoPETV
 git lfs pull
-
-cd nnunet-baseline
-bash check_weights.sh            # verifies the deploy checkpoint's SHA-256
-bash package_model_weights.sh    # -> nnUNet_results.tar.gz
-bash export.sh                   # -> container tarball
-bash test.sh                     # runs the container on the sample case
 ```
 
-The weights are uploaded separately on Grand Challenge (Algorithm →
-Models) rather than baked into the image; Grand Challenge extracts them
-to `/opt/ml/model/`, matching `ENV nnUNet_results` in the Dockerfile.
+`git lfs pull` is required. Without it the checkpoint is a ~130-byte
+pointer file and `check_weights.sh` will fail with a clear message.
+
+### 2. Verify the checkpoint
+
+```bash
+cd nnunet-baseline
+bash check_weights.sh
+```
+
+Checks that the checkpoint exists, is not an unresolved LFS pointer, and
+matches the expected SHA-256
+(`3c43905f9472d6ee2bdc1a63101b4b00d338731e44a75fbfe530fa1479bde570`).
+This gate runs automatically before every build and packaging step.
+
+### 3. Build and run on the sample case
+
+```bash
+bash build.sh    # builds the Docker image
+bash test.sh     # runs it on test/input, writes to test/output
+```
+
+`test.sh` runs the container under the same constraints Grand Challenge
+applies (30 GB memory cap, no network, dropped capabilities) and mounts
+the weights read-only at `/opt/ml/model`. Output is written to
+`test/output/images/tumor-lesion-segmentation/`.
+
+### 4. Package for Grand Challenge
+
+```bash
+bash package_model_weights.sh   # -> nnUNet_results.tar.gz  (Models page)
+bash export.sh                  # -> container tarball      (Container page)
+```
+
+Both files belong to the same Algorithm and must be uploaded together.
+The weights are shipped separately rather than baked into the image;
+Grand Challenge extracts the tarball to `/opt/ml/model/`, which is where
+`ENV nnUNet_results` in the Dockerfile points.
+
+### Running inference directly (without Docker)
+
+With `nnunetv2==2.6.0` installed and `nnUNet_results` pointing at
+`interactive/nnUNet_results`, the trainer class must exist on the Python
+path before prediction, because nnU-Net resolves `-tr` by scanning the
+installed package (see `_install_custom_trainer` in `process.py`). Then:
+
+```bash
+nnUNetv2_predict -i <input_dir> -o <output_dir> \
+  -d 994 -c 3d_fullres -f 0 \
+  -tr nnUNetTrainerResEnc4ChannelRoundSupervisionEDT \
+  -p nnUNetResEncUNetMPlans \
+  -chk checkpoint_deploy.pth --disable_tta
+```
+
+`<input_dir>` must contain four channels per case, named
+`<case>_0000.nii.gz` (CT), `_0001` (PET), `_0002` (foreground guidance)
+and `_0003` (background guidance). Generate the guidance channels with
+`save_click_heatmaps` from `nnunet-baseline/utils.py` so the encoding
+matches training.
 
 ## Post-processing
 
