@@ -18,8 +18,9 @@ bash "$SCRIPTPATH/check_weights.sh"
 OUT_FILE="$SCRIPTPATH/nnUNet_results.tar.gz"
 
 echo ""
-echo "Packaging $SCRIPTPATH/nnUNet_results -> $OUT_FILE"
-tar -czf "$OUT_FILE" -C "$SCRIPTPATH" nnUNet_results
+MODEL_ROOT="$SCRIPTPATH/../interactive/nnUNet_results"
+echo "Packaging $MODEL_ROOT -> $OUT_FILE"
+tar -czf "$OUT_FILE" -C "$SCRIPTPATH/../interactive" nnUNet_results
 
 SIZE_MB=$(du -m "$OUT_FILE" | cut -f1)
 echo ""

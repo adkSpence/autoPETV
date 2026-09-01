@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM docker.io/pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 RUN groupadd -r algorithm && \
     useradd -m --no-log-init -r -g algorithm algorithm && \

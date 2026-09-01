@@ -37,6 +37,7 @@ docker run -it --rm \
         -v $SCRIPTPATH/test/input/:/input/ \
         -v $SCRIPTPATH/test/output:/output/ \
         -v $SCRIPTPATH/test/cache/:/cache/ \
+        -v $SCRIPTPATH/interactive/nnUNet_results:/opt/ml/model/nnUNet_results:ro \
         autopet_baseline
 
 

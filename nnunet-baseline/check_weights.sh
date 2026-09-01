@@ -7,7 +7,9 @@
 # rather than silently substituting a different model's weights.
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-CHECKPOINT_PATH="$SCRIPTPATH/nnUNet_results/Dataset990_AutoPETCombined/nnUNetTrainer_500ep_freqsave__nnUNetPlans__3d_fullres/fold_0/checkpoint_final.pth"
+MODEL_DIR="$SCRIPTPATH/../interactive/nnUNet_results/Dataset994_AutoPETInteractiveFull/nnUNetTrainerResEnc4ChannelRoundSupervisionEDT__nnUNetResEncUNetMPlans__3d_fullres"
+CHECKPOINT_PATH="$MODEL_DIR/fold_0/checkpoint_deploy.pth"
+EXPECTED_SHA256="3c43905f9472d6ee2bdc1a63101b4b00d338731e44a75fbfe530fa1479bde570"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -52,7 +54,21 @@ if [ "$filesize_mb" -lt 100 ]; then
     exit 1
 fi
 
+actual_sha256=$(sha256sum "$CHECKPOINT_PATH" | cut -d' ' -f1)
+if [ "$actual_sha256" != "$EXPECTED_SHA256" ]; then
+    echo -e "${RED}ERROR: Deployment checkpoint hash mismatch${NC}"
+    echo "Expected: $EXPECTED_SHA256"
+    echo "Actual:   $actual_sha256"
+    exit 1
+fi
+
 echo -e "${GREEN}✓ Checkpoint file exists and appears valid (${filesize_mb}MB)${NC}"
+for metadata in dataset.json plans.json; do
+    if [ ! -f "$MODEL_DIR/$metadata" ]; then
+        echo -e "${RED}ERROR: Missing model metadata: $MODEL_DIR/$metadata${NC}"
+        exit 1
+    fi
+done
 echo -e "${GREEN}===============================================${NC}"
 echo -e "${GREEN}Weight check complete! Ready to proceed.${NC}"
 echo -e "${GREEN}===============================================${NC}"
