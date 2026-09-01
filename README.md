@@ -1,58 +1,109 @@
-![](https://public.grand-challenge-user-content.org/b/842/autoPET-2026-banner-1/2200w.avif)
-# autoPET V
-Official repository for autoPET V machine learning challenge:<br>
-[autopet-v.grand-challenge.org](https://autopet-v.grand-challenge.org)<br>
-[www.autopet.org](www.autopet.org)<br>
+# Volyagers — autoPET V challenge submission
 
-## Content
-- [nnUNet baseline model](nnunet-baseline/)
-- [Algorithm/container setup for grand-challenge](test/)
-- [Interactive scribbles](interactive/)
-- [DeepPSMA dataset in nnUNet format](DeepPSMA)
-- [Tutorials](tutorials/)
-   - [New evaluation metrics](tutorials/metrics-tutorial.ipynb)
-   - [Interactive scribble simulation](tutorials/scribble-simulation-tutorial.ipynb)
-   - [Summary and main findings of autoPET I - IV](tutorials/autoPETI-IV-Summary.pdf)
-- [Publication template](publication_template/)
+Interactive whole-body PET/CT lesion segmentation for the
+[autoPET V challenge](https://autopet-v.grand-challenge.org).
 
+Submitted algorithm: **autoPETV EDT+** — a 3D residual-encoder U-Net
+trained with round supervision, taking CT, PET and two click-guidance
+channels as input.
 
-## Datasets				
-If you use the data associated to this challenge, please cite: <br/>
-   
-   ```
-   Gatidis S, Kuestner T. A whole-body FDG-PET/CT dataset with manually annotated tumor lesions (FDG-PET-CT-Lesions) 
-   [Dataset]. The Cancer Imaging Archive, 2022. DOI: 10.7937/gkr0-xv29
+| Metric | Preliminary test set |
+|---|---|
+| Dice | **0.7702** |
+| Lesion-level F1 | **0.7558** |
 
-   Gatidis S., Hepp T., Früh M., La Fougère C., Nikolaou K., Pfannenberg, C., Schölkopf B., Küstner T., 
-   Cyran C., Rubin D. A whole-body FDG-PET/CT Dataset with manually annotated Tumor Lesions. Sci Data 9, 601 (2022). 
-   https://doi.org/10.1038/s41597-022-01718-3
-   ```
-   
-   and
-   <br/>
-   
-   ```
-   Jeblick, K., et al. A whole-body PSMA-PET/CT dataset with manually annotated tumor lesions 
-   (PSMA-PET-CT-Lesions) (Version 1) [Dataset]. The Cancer Imaging Archive, 2024.
-   DOI: 10.7937/r7ep-3x37
-   ```
+Single model, single fold, no ensembling, no test-time augmentation.
 
-### FDG PET/CT
-DICOM: <a href="https://doi.org/10.7937/gkr0-xv29"><img src="https://img.shields.io/badge/DOI-10.7937%2Fgkr0--xv29-blue"></a>
-<br/>
-NIfTI: <a href="https://doi.org/10.57754/FDAT.wf9fy-txq84"><img src="https://img.shields.io/badge/DOI-10.57754%2FFDAT.wf9fy--txq84-blue"></a>
-    
-### PSMA PET/CT
-DICOM:  <a href="https://doi.org/10.7937/r7ep-3x37 "><img src="https://img.shields.io/badge/DOI-10.7937%2Fr7ep--3x37-blue"></a>
-<br/>
-NIfTI: <a href="https://doi.org/10.57754/FDAT.6gjsg-zcg93"><img src="https://img.shields.io/badge/DOI-10.57754%2FFDAT.6gjsg--zcg93-blue"></a>
+## The submitted model
 
-### FDG-PSMA PET/CT
-NIfTI: <a href="https://doi.org/10.57754/FDAT.rdkqd-wdh87"><img src="https://img.shields.io/badge/DOI-10.57754%2FFDAT.rdkqd--wdh87-blue"></a>
+| | |
+|---|---|
+| Dataset | `Dataset994_AutoPETInteractiveFull` (1611 studies) |
+| Input | 4 channels: CT, PET, foreground guidance, background guidance |
+| Architecture | `ResidualEncoderUNet`, 6 stages, features `[32,64,128,256,320,320]` |
+| Plans | `nnUNetResEncUNetMPlans`, patch `112x160x128`, batch 2 |
+| Trainer | `nnUNetTrainerResEnc4ChannelRoundSupervisionEDT` |
+| Checkpoint | `checkpoint_deploy.pth` (epoch 950, SHA-256 pinned) |
+| Training | 1x NVIDIA H200, ~97 h wall-clock |
 
-### Longitudinal CT
-NIfTI: <a href="https://doi.org/10.57754/FDAT.qwsry-7t837"><img src="https://img.shields.io/badge/DOI-10.57754%2FFDAT.qwsry--7t837-blue"></a>
+### Click encoding
 
-### DeepPSMA
-NIfTI: <a href="https://doi.org/10.5281/zenodo.15281784"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.15281784-blue"></a>
+Clicks are rendered into two channels as a **spacing-aware local
+Euclidean distance transform**: value 1 at the click, decaying linearly
+to 0 at a 40 mm support radius, computed in millimetres so it is
+invariant to voxel spacing. The channels are passed through the network
+unnormalised.
 
+This must match between training and inference. An earlier submission
+used an inverted encoding (0 at the click, rising with distance, in
+voxels) and scored **0.40** with identical weights; correcting the
+encoding alone raised it to 0.7702. See `nnunet-baseline/utils.py`
+(`generate_edt_heatmap`).
+
+## Repository layout
+
+```
+nnunet-baseline/          submission container (build + package scripts)
+  process.py              entrypoint: /input -> predict -> /output
+  utils.py                click -> guidance channel encoding
+  postprocess_filters.py  false-positive component filter
+  check_weights.sh        verifies checkpoint presence + SHA-256
+  package_model_weights.sh -> nnUNet_results.tar.gz  (Models page)
+  export.sh                -> container tarball       (Container page)
+interactive/              model weights, evaluation loop
+  nnUNet_results/         Dataset994 checkpoints (git-lfs)
+  interactive_loop.py     multi-round evaluation protocol
+sahib_handoff/            scripts for training folds at scale
+paper/                    LNCS manuscript
+```
+
+## Reproducing the submission
+
+Requires `git-lfs` and Docker with GPU support.
+
+```bash
+git clone https://github.com/adkSpence/autoPETV.git
+cd autoPETV
+git lfs pull
+
+cd nnunet-baseline
+bash check_weights.sh            # verifies the deploy checkpoint's SHA-256
+bash package_model_weights.sh    # -> nnUNet_results.tar.gz
+bash export.sh                   # -> container tarball
+bash test.sh                     # runs the container on the sample case
+```
+
+The weights are uploaded separately on Grand Challenge (Algorithm →
+Models) rather than baked into the image; Grand Challenge extracts them
+to `/opt/ml/model/`, matching `ENV nnUNet_results` in the Dockerfile.
+
+## Post-processing
+
+Predicted connected components (18-connectivity) are removed only if they
+fail **both** a volume criterion (< 0.35 mL) and an uptake criterion
+(SUV_max < 6.0). Requiring both avoids discarding small but metabolically
+active lesions.
+
+## Data
+
+Challenge data only; no external data and no pre-trained weights. The raw
+data is not redistributed here — obtain it from the challenge organisers.
+If you use it, cite:
+
+- Gatidis S., Hepp T., Früh M., et al. *A whole-body FDG-PET/CT dataset
+  with manually annotated tumor lesions.* Sci Data 9, 601 (2022).
+  [doi:10.1038/s41597-022-01718-3](https://doi.org/10.1038/s41597-022-01718-3)
+- Gatidis S., Kuestner T. *FDG-PET-CT-Lesions* [Dataset]. TCIA (2022).
+  [doi:10.7937/gkr0-xv29](https://doi.org/10.7937/gkr0-xv29)
+- Jeblick K., et al. *PSMA-PET-CT-Lesions* (Version 1) [Dataset]. TCIA
+  (2024). [doi:10.7937/r7ep-3x37](https://doi.org/10.7937/r7ep-3x37)
+
+## Notes
+
+`nnunet-baseline/` began as a fork of the organisers' baseline
+([lab-midas/autoPETV](https://github.com/lab-midas/autoPETV)); the sample
+test case under `test/` comes from that repository.
+
+Some directories (`modal_deploy/`, `sandbox/`, `nnunet-baseline-2ch/`)
+contain development and ablation code that is not part of the submission
+and is kept for transparency rather than reuse.
